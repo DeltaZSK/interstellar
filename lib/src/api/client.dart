@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:interstellar/src/controller/server.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart';
@@ -57,6 +58,18 @@ class ServerClient {
     Map<String, String?>? queryParams,
     JsonMap? body,
   }) => _send('DELETE', path, queryParams: queryParams, body: body);
+
+  /// Form-encoded POST, as required by Reddit's write endpoints
+  /// (`/api/vote`, `/api/comment`, `/api/subscribe`, ...), which do not
+  /// accept the JSON bodies [_send] uses.
+  Future<http.Response> postForm(
+    String path, {
+    required Map<String, String> fields,
+    Map<String, String?>? queryParams,
+  }) async {
+    final request = http.Request('POST', _uri(path, queryParams: queryParams));
+    return _sendRequest(request..bodyFields = fields);
+  }
 
   Future<http.Response> _send(
     String method,
@@ -131,7 +144,9 @@ class ServerClient {
   }
 
   Uri _uri(String path, {Map<String, String?>? queryParams}) => Uri.https(
-    domain,
+    // Reddit is a single host, not an instance: authenticated calls go
+    // to oauth.reddit.com, and paths are used as-is (no API prefix).
+    software == ServerSoftware.reddit ? redditApiHost : domain,
     software.apiPathPrefix + path,
     queryParams == null ? null : _normalizeQueryParams(queryParams),
   );
@@ -153,6 +168,10 @@ class ServerClient {
       switch (software) {
         case ServerSoftware.mbin:
           throw Exception('Tried to get lang id with Mbin');
+
+        case ServerSoftware.reddit:
+          // Reddit has no language IDs.
+          return [];
 
         case ServerSoftware.lemmy:
           final response = await get('/site');

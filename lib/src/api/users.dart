@@ -5,6 +5,7 @@ import 'package:interstellar/src/controller/server.dart';
 import 'package:interstellar/src/models/user.dart';
 import 'package:interstellar/src/screens/explore/explore_screen.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 
 class APIUsers {
@@ -86,6 +87,11 @@ class APIUsers {
         );
 
         return DetailedUserListModel.fromPiefed(json);
+
+      case ServerSoftware.reddit:
+        // Reddit has no followed-users list endpoint; the nav drawer
+        // expects a list here, so return an empty one instead of failing.
+        return const DetailedUserListModel(items: [], nextPage: null);
     }
   }
 
@@ -117,6 +123,16 @@ class APIUsers {
         return DetailedUserModel.fromPiefed(
           response.bodyJson['person_view']! as JsonMap,
         );
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/api/info',
+          queryParams: {'id': redditFullname('t2', userId)},
+        );
+
+        final children = redditListingChildren(response.bodyJson);
+        if (children.isEmpty) throw Exception('User not found: $userId');
+        return DetailedUserModel.fromReddit(children.first);
     }
   }
 
@@ -149,6 +165,15 @@ class APIUsers {
         return DetailedUserModel.fromPiefed(
           response.bodyJson['person_view']! as JsonMap,
         );
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/user/${redditStripInstance(username)}/about',
+        );
+
+        return DetailedUserModel.fromReddit(
+          response.bodyJson['data']! as JsonMap,
+        );
     }
   }
 
@@ -180,6 +205,13 @@ class APIUsers {
           ((response.bodyJson as dynamic)['my_user']['local_user_view'])
               as JsonMap,
         );
+
+      case ServerSoftware.reddit:
+        const path = '/api/v1/me';
+
+        final response = await client.get(path);
+
+        return DetailedUserModel.fromReddit(response.bodyJson);
     }
   }
 
@@ -197,6 +229,8 @@ class APIUsers {
 
       case ServerSoftware.piefed:
         throw Exception('User follow not allowed on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -222,6 +256,8 @@ class APIUsers {
         final response = await client.put(path, body: {'bio': about});
 
         return null;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -258,6 +294,8 @@ class APIUsers {
           response.bodyJson['person_view']! as JsonMap,
           blocked: response.bodyJson['blocked'] as bool? ?? false,
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -310,6 +348,8 @@ class APIUsers {
         final response = await client.put(path, body: {'avatar': imageUrl});
 
         return null;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -334,6 +374,8 @@ class APIUsers {
         final response = await client.put(path, body: {'avatar': ''});
 
         return null;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -386,6 +428,8 @@ class APIUsers {
         final response = await client.put(path, body: {'cover': imageUrl});
 
         return null;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -410,6 +454,8 @@ class APIUsers {
         final response = await client.put(path, body: {'cover': ''});
 
         return null;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -431,6 +477,8 @@ class APIUsers {
 
       case ServerSoftware.piefed:
         throw Exception('User followers not allowed on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -452,6 +500,8 @@ class APIUsers {
 
       case ServerSoftware.piefed:
         throw Exception('List following not allowed on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -483,6 +533,26 @@ class APIUsers {
           ((response.bodyJson
                   as dynamic)['my_user']['local_user_view']['local_user'])
               as JsonMap,
+        );
+
+      case ServerSoftware.reddit:
+        // Reddit user prefs are not part of this fork's scope; report
+        // defaults so the profile screen still loads.
+        return UserSettings(
+          showNSFW: true,
+          blurNSFW: null,
+          showReadPosts: null,
+          showSubscribedUsers: null,
+          showSubscribedCommunities: null,
+          showSubscribedDomains: null,
+          showProfileSubscriptions: null,
+          showProfileFollowings: null,
+          notifyOnNewEntry: null,
+          notifyOnNewEntryReply: null,
+          notifyOnNewEntryCommentReply: null,
+          notifyOnNewPost: null,
+          notifyOnNewPostReply: null,
+          notifyOnNewPostCommentReply: null,
         );
     }
   }
@@ -546,6 +616,10 @@ class APIUsers {
                   as dynamic)['my_user']['local_user_view']['local_user'])
               as JsonMap,
         );
+
+      case ServerSoftware.reddit:
+        // No-op: Reddit prefs are out of scope for this fork.
+        return settings;
     }
   }
 }

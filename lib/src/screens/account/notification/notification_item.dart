@@ -69,6 +69,8 @@ class _NotificationItemState extends State<NotificationItem> {
             : null,
       ServerSoftware.lemmy => null,
       ServerSoftware.piefed => null,
+      // Notifications are not supported on Reddit in this fork.
+      ServerSoftware.reddit => null,
     };
 
     final body = switch (software) {
@@ -85,6 +87,7 @@ class _NotificationItemState extends State<NotificationItem> {
         _ => throw Exception('invalid notification type for lemmy'),
       },
       ServerSoftware.piefed => (widget.item.subject['notif_body']) as String,
+      ServerSoftware.reddit => '',
     };
 
     final onTap = switch (software) {
@@ -168,6 +171,7 @@ class _NotificationItemState extends State<NotificationItem> {
         ),
         _ => throw Exception('invalid notification type for piefed'),
       },
+      ServerSoftware.reddit => null,
     };
 
     return Card.outlined(

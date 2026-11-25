@@ -24,6 +24,8 @@ class _LoginConfirmScreenState extends State<LoginConfirmScreen> {
   final _usernameEmailTextController = TextEditingController();
   final _passwordTextController = TextEditingController();
   final _totpTokenTextController = TextEditingController();
+  // Reddit only: the client ID of the user's own installed Reddit app.
+  final _redditClientIdTextController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -83,29 +85,56 @@ class _LoginConfirmScreenState extends State<LoginConfirmScreen> {
                 ),
               ),
             ),
+          if (widget.software == ServerSoftware.reddit)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                spacing: 12,
+                children: [
+                  TextEditor(
+                    _redditClientIdTextController,
+                    label: 'Reddit app client ID',
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const Text(
+                    'Create an installed app at reddit.com/prefs/apps and '
+                    'paste its client ID here. Set its redirect URI to '
+                    'interstellar://auth on mobile, or '
+                    'http://localhost:46837 on desktop.',
+                  ),
+                ],
+              ),
+            ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              OutlinedButton(
-                onPressed: () {
-                  final account = '@${widget.server}';
-                  context.read<AppController>().setAccount(
-                    account,
-                    const Account(handle: '', isPushRegistered: false),
-                    switchNow: true,
-                  );
+              // Reddit blocks unauthenticated traffic, so there is no
+              // guest mode for it.
+              if (widget.software != ServerSoftware.reddit)
+                OutlinedButton(
+                  onPressed: () {
+                    final account = '@${widget.server}';
+                    context.read<AppController>().setAccount(
+                      account,
+                      const Account(handle: '', isPushRegistered: false),
+                      switchNow: true,
+                    );
 
-                  context.router.pop(true);
-                },
-                child: Text(l(context).guest),
-              ),
-              const SizedBox(width: 12),
+                    context.router.pop(true);
+                  },
+                  child: Text(l(context).guest),
+                ),
+              if (widget.software != ServerSoftware.reddit)
+                const SizedBox(width: 12),
               LoadingFilledButton(
                 label: Text(l(context).login),
                 onPressed:
-                    widget.software == ServerSoftware.lemmy &&
+                    (widget.software == ServerSoftware.lemmy &&
                         (_usernameEmailTextController.text.isEmpty ||
-                            _passwordTextController.text.isEmpty)
+                            _passwordTextController.text.isEmpty))
+                    ? null
+                    : (widget.software == ServerSoftware.reddit &&
+                          _redditClientIdTextController.text.isEmpty)
                     ? null
                     : () async {
                         await context.read<AppController>().login(
@@ -114,6 +143,10 @@ class _LoginConfirmScreenState extends State<LoginConfirmScreen> {
                           username: _usernameEmailTextController.text,
                           password: _passwordTextController.text,
                           totp: _totpTokenTextController.text,
+                          oauthClientId:
+                              widget.software == ServerSoftware.reddit
+                              ? _redditClientIdTextController.text
+                              : null,
                           context: context,
                         );
 

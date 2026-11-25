@@ -3,6 +3,7 @@ import 'package:interstellar/src/controller/server.dart';
 import 'package:interstellar/src/models/community.dart';
 import 'package:interstellar/src/screens/explore/explore_screen.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 
 enum APIExploreSort {
@@ -34,6 +35,7 @@ enum APIExploreSort {
         ServerSoftware.mbin => [hot, active, newest],
         ServerSoftware.lemmy => values,
         ServerSoftware.piefed => [hot, topAll, newest, active],
+        ServerSoftware.reddit => [hot, newest, topAll],
       };
 
   String nameBySoftware(ServerSoftware software) => switch (software) {
@@ -70,6 +72,12 @@ enum APIExploreSort {
       APIExploreSort.newest => 'New',
       APIExploreSort.topAll => 'Top',
       _ => 'Hot',
+    },
+    ServerSoftware.reddit => switch (this) {
+      APIExploreSort.hot => 'hot',
+      APIExploreSort.newest => 'new',
+      APIExploreSort.topAll => 'top',
+      _ => 'hot',
     },
   };
 }
@@ -215,6 +223,25 @@ class APICommunity {
 
           return DetailedCommunityListModel.fromPiefed(response.bodyJson);
         }
+
+      case ServerSoftware.reddit:
+        final path = search != null
+            ? '/subreddits/search'
+            : switch (filter) {
+                ExploreFilter.subscribed => '/subreddits/mine/subscriber',
+                ExploreFilter.moderated => '/subreddits/mine/moderator',
+                _ => '/subreddits/popular',
+              };
+        final query = {
+          'limit': '50',
+          'after': page,
+          'raw_json': '1',
+          'q': ?search,
+        };
+
+        final response = await client.get(path, queryParams: query);
+
+        return DetailedCommunityListModel.fromReddit(response.bodyJson);
     }
   }
 
@@ -242,6 +269,18 @@ class APICommunity {
         final response = await client.get(path, queryParams: query);
 
         return DetailedCommunityModel.fromPiefed(response.bodyJson);
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/api/info',
+          queryParams: {'id': redditFullname('t5', communityId)},
+        );
+
+        final children = redditListingChildren(response.bodyJson);
+        if (children.isEmpty) {
+          throw Exception('Subreddit not found: $communityId');
+        }
+        return DetailedCommunityModel.fromReddit(children.first);
     }
   }
 
@@ -269,6 +308,15 @@ class APICommunity {
         final response = await client.get(path, queryParams: query);
 
         return DetailedCommunityModel.fromPiefed(response.bodyJson);
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/r/${redditStripInstance(communityName)}/about',
+        );
+
+        return DetailedCommunityModel.fromReddit(
+          response.bodyJson['data']! as JsonMap,
+        );
     }
   }
 
@@ -303,6 +351,17 @@ class APICommunity {
         );
 
         return DetailedCommunityModel.fromPiefed(response.bodyJson);
+
+      case ServerSoftware.reddit:
+        await client.postForm(
+          '/api/subscribe',
+          fields: {
+            'action': state ? 'sub' : 'unsub',
+            'sr': redditFullname('t5', communityId),
+          },
+        );
+
+        return get(communityId);
     }
   }
 
@@ -336,6 +395,8 @@ class APICommunity {
         );
 
         return DetailedCommunityModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }

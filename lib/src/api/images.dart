@@ -57,6 +57,8 @@ class APIImages {
               );
 
               return response.bodyJson['url']! as String;
+            case ServerSoftware.reddit:
+              throw UnsupportedError('Not supported on Reddit');
           }
         case ImageStore.catbox:
           const path = 'https://catbox.moe/user/api.php';

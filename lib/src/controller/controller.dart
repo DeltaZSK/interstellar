@@ -22,6 +22,7 @@ import 'package:interstellar/src/init_push_notifications.dart';
 import 'package:interstellar/src/models/post.dart';
 import 'package:interstellar/src/utils/globals.dart';
 import 'package:interstellar/src/utils/http_client.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:interstellar/src/widgets/markdown/markdown_mention.dart';
 import 'package:logger/logger.dart';
@@ -423,6 +424,30 @@ class AppController with ChangeNotifier {
         .insertOnConflictUpdate(_servers[server]!);
   }
 
+  /// Store a user-supplied OAuth identifier (client ID) for a server.
+  /// Used for Reddit, where the user creates their own installed app and
+  /// enters its client ID at login. Reuses the `oauthIdentifier` column
+  /// Mbin uses for its registered app identifier.
+  Future<void> setServerOAuthIdentifier(
+    String server,
+    String identifier,
+  ) async {
+    final current = _servers[server];
+    if (current == null) {
+      throw Exception('Unknown server: $server');
+    }
+
+    _servers[server] = Server(
+      name: server,
+      software: current.software,
+      oauthIdentifier: identifier,
+    );
+
+    await database
+        .into(database.servers)
+        .insertOnConflictUpdate(_servers[server]!);
+  }
+
   Future<String> getMbinOAuthIdentifier(
     ServerSoftware software,
     String server,
@@ -456,6 +481,8 @@ class AppController with ChangeNotifier {
     String? username,
     String? password,
     String? totp,
+    // Reddit only: the client ID of the user's own installed Reddit app.
+    String? oauthClientId,
     BuildContext? context,
   }) async {
     switch (software) {
@@ -473,6 +500,7 @@ class AppController with ChangeNotifier {
               ServerSoftware.lemmy => 'username_or_email',
               ServerSoftware.piefed => 'username',
               ServerSoftware.mbin => throw UnreachableError(),
+              ServerSoftware.reddit => throw UnreachableError(),
             }: username,
             'password': password?.substring(
               0,
@@ -570,6 +598,101 @@ class AppController with ChangeNotifier {
           Account(
             handle: handle,
             oauth: client.credentials,
+            isPushRegistered: false,
+          ),
+          switchNow: true,
+          forceSwitch: true,
+        );
+
+        return;
+      case ServerSoftware.reddit:
+        final clientId = oauthClientId?.trim() ?? '';
+        if (clientId.isEmpty) {
+          throw Exception(
+            'Enter the client ID of your Reddit app (reddit.com/prefs/apps, installed app).',
+          );
+        }
+
+        await setServerOAuthIdentifier(server, clientId);
+
+        // Installed apps have no client secret; the code is exchanged
+        // manually in exchangeRedditCode with Basic auth `client_id:`.
+        final state = redditRandomState();
+        final authorizationUrl = redditAuthorizationUrl(
+          clientId: clientId,
+          redirectUri: oauthRedirectUri,
+          state: state,
+        );
+
+        WebViewController? redditWebViewController;
+        if (PlatformIs.android) {
+          redditWebViewController = WebViewController()
+            ..setJavaScriptMode(JavaScriptMode.unrestricted)
+            ..setNavigationDelegate(
+              NavigationDelegate(
+                onNavigationRequest: (request) {
+                  if (request.url.startsWith(oauthRedirectUri.toString())) {
+                    WebViewCookieManager().clearCookies();
+                    context?.router.pop(request.url);
+                    return NavigationDecision.prevent;
+                  }
+                  return NavigationDecision.navigate;
+                },
+              ),
+            )
+            ..loadRequest(authorizationUrl);
+        }
+
+        final redditRes = PlatformIs.android
+            ? await context?.router.push<String>(
+                WebViewRoute(controller: redditWebViewController!),
+              )
+            : await FlutterWebAuth2.authenticate(
+                url: authorizationUrl.toString(),
+                callbackUrlScheme: PlatformIs.linux || PlatformIs.windows
+                    ? oauthRedirectUri.toString()
+                    : oauthRedirectUri.scheme,
+              );
+        if (redditRes == null) {
+          return;
+        }
+
+        final redditResult = Uri.parse(redditRes).queryParameters;
+
+        if (!redditResult.containsKey('code')) {
+          throw Exception(redditResult['message'] ?? 'unsuccessful login');
+        }
+        if (redditResult['state'] != null && redditResult['state'] != state) {
+          throw Exception('OAuth state mismatch, login aborted');
+        }
+
+        final credentials = await exchangeRedditCode(
+          clientId: clientId,
+          code: redditResult['code']!,
+          redirectUri: oauthRedirectUri,
+        );
+
+        final redditClient = oauth2.Client(
+          credentials,
+          identifier: clientId,
+          secret: '',
+          httpClient: appHttpClient,
+        );
+
+        final redditUser = await API(
+          ServerClient(
+            httpClient: redditClient,
+            software: software,
+            domain: server,
+          ),
+        ).users.getMe();
+
+        final redditHandle = '${redditUser.name}@$server';
+        setAccount(
+          redditHandle,
+          Account(
+            handle: redditHandle,
+            oauth: redditClient.credentials,
             isPushRegistered: false,
           ),
           switchNow: true,
@@ -695,6 +818,26 @@ class AppController with ChangeNotifier {
           httpClient = oauth2.Client(
             credentials,
             identifier: identifier,
+            onCredentialsRefreshed: (newCredentials) async {
+              setAccount(
+                account,
+                _accounts[account]!.copyWith(oauth: Value(newCredentials)),
+              );
+            },
+            httpClient: appHttpClient,
+          );
+        }
+      case ServerSoftware.reddit:
+        // Same OAuth credential storage as Mbin, but the identifier is
+        // the user's own Reddit client ID and installed apps have an
+        // empty secret.
+        final credentials = _accounts[account]?.oauth;
+        if (credentials != null) {
+          final identifier = _servers[instance]!.oauthIdentifier;
+          httpClient = oauth2.Client(
+            credentials,
+            identifier: identifier,
+            secret: '',
             onCredentialsRefreshed: (newCredentials) async {
               setAccount(
                 account,
@@ -952,8 +1095,12 @@ class AppController with ChangeNotifier {
   }
 
   Future<List<PostModel>> markAsRead(List<PostModel> posts, bool read) async {
-    // Use Lemmy's and PieFed's read API when available
-    if (isLoggedIn && serverSoftware != ServerSoftware.mbin) {
+    // Use Lemmy's and PieFed's read API when available. Reddit has no
+    // mark-as-read API, so it falls through to the local database below,
+    // like Mbin.
+    if (isLoggedIn &&
+        serverSoftware != ServerSoftware.mbin &&
+        serverSoftware != ServerSoftware.reddit) {
       await api.threads.markAsRead(posts.map((post) => post.id).toList(), read);
     }
     // Use local database otherwise.

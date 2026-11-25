@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:interstellar/src/api/client.dart';
 import 'package:interstellar/src/controller/controller.dart';
 import 'package:interstellar/src/controller/server.dart';
 import 'package:interstellar/src/models/comment.dart';
+import 'package:interstellar/src/models/community.dart';
 import 'package:interstellar/src/models/post.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:interstellar/src/widgets/selection_menu.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -112,6 +116,33 @@ class APIComments {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        final sortName = switch (sort) {
+          null || CommentSort.hot => 'confidence',
+          CommentSort.top => 'top',
+          CommentSort.newest => 'new',
+          CommentSort.oldest => 'old',
+          CommentSort.active => 'controversial',
+        };
+        // Reddit returns a JSON *array* `[postListing, commentListing]`,
+        // so this cannot use `bodyJson` (which expects a JSON object).
+        final response = await client.get(
+          '/comments/${redditFullname('t3', postId)}',
+          queryParams: {'sort': sortName, 'raw_json': '1', 'limit': '100'},
+        );
+        final jsonList = jsonDecode(response.body) as List<dynamic>;
+        final postChildren = jsonList.isNotEmpty
+            ? redditListingChildren(jsonList[0] as JsonMap)
+            : <JsonMap>[];
+        final community = postChildren.isEmpty
+            ? const CommunityModel(id: 0, name: '', icon: null, apId: null)
+            : CommunityModel.fromReddit(postChildren.first);
+        return CommentListModel.fromReddit(
+          jsonList,
+          postId: postId,
+          community: community,
+        );
     }
   }
 
@@ -165,7 +196,25 @@ class APIComments {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/user/${await _redditUserName(userId)}/comments',
+          queryParams: {'after': page, 'limit': '25', 'raw_json': '1'},
+        );
+
+        return CommentListModel.fromRedditFlat(response.bodyJson);
     }
+  }
+
+  Future<String> _redditUserName(int userId) async {
+    final response = await client.get(
+      '/api/info',
+      queryParams: {'id': redditFullname('t2', userId)},
+    );
+    final children = redditListingChildren(response.bodyJson);
+    if (children.isEmpty) throw Exception('Unknown user id $userId');
+    return children.first['name']! as String;
   }
 
   Future<CommentModel> get(PostType postType, int commentId) async {
@@ -202,6 +251,22 @@ class APIComments {
             (item) => item['comment']['id'] == commentId,
           ),
           langCodeIdPairs: await client.languageCodeIdPairs(),
+        );
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/api/info',
+          queryParams: {'id': redditFullname('t1', commentId)},
+        );
+
+        final children = redditListingChildren(response.bodyJson);
+        if (children.isEmpty) throw Exception('Comment not found: $commentId');
+        final data = children.first;
+        final linkId = data['link_id'] as String?;
+        return CommentModel.fromReddit(
+          data,
+          postId: linkId == null ? 0 : redditIdToInt(linkId),
+          community: CommunityModel.fromReddit(data),
         );
     }
   }
@@ -248,6 +313,17 @@ class APIComments {
           response.bodyJson['comment_view']! as JsonMap,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        await client.postForm(
+          '/api/vote',
+          fields: {
+            'id': redditFullname('t1', commentId),
+            'dir': choice.toString(),
+          },
+        );
+
+        return get(postType, commentId);
     }
   }
 
@@ -265,6 +341,8 @@ class APIComments {
 
       case ServerSoftware.piefed:
         throw Exception('Tried to boost on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -343,7 +421,41 @@ class APIComments {
           response.bodyJson['comment_view']! as JsonMap,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        if (image != null) {
+          throw UnsupportedError('Image comments are not supported on Reddit');
+        }
+        // Reddit returns the new comment inside a `json.data.things`
+        // wrapper, not as a bare comment object.
+        final response = await client.postForm(
+          '/api/comment',
+          fields: {
+            'thing_id': parentCommentId != null
+                ? redditFullname('t1', parentCommentId)
+                : redditFullname('t3', postId),
+            'text': body,
+          },
+        );
+        final data = _redditNewCommentData(response.bodyJson);
+        final linkId = data['link_id'] as String?;
+        return CommentModel.fromReddit(
+          data,
+          postId: linkId == null ? postId : redditIdToInt(linkId),
+          community: CommunityModel.fromReddit(data),
+        );
     }
+  }
+
+  /// Unwrap Reddit's `/api/comment` / `/api/editusertext` response:
+  /// `{json: {data: {things: [{data: <comment>}]}}}`.
+  JsonMap _redditNewCommentData(JsonMap json) {
+    final things =
+        (((json['json'] as JsonMap?)?['data'] as JsonMap?)?['things']
+                as List<dynamic>?)
+            ?.firstOrNull;
+    if (things == null) throw Exception('Reddit did not return the comment');
+    return (things as JsonMap)['data']! as JsonMap;
   }
 
   Future<CommentModel> edit(
@@ -384,6 +496,19 @@ class APIComments {
           response.bodyJson['comment_view']! as JsonMap,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        final response = await client.postForm(
+          '/api/editusertext',
+          fields: {'thing_id': redditFullname('t1', commentId), 'text': body},
+        );
+        final data = _redditNewCommentData(response.bodyJson);
+        final linkId = data['link_id'] as String?;
+        return CommentModel.fromReddit(
+          data,
+          postId: linkId == null ? 0 : redditIdToInt(linkId),
+          community: CommunityModel.fromReddit(data),
+        );
     }
   }
 
@@ -409,6 +534,12 @@ class APIComments {
           path,
           body: {'comment_id': commentId, 'deleted': true},
         );
+
+      case ServerSoftware.reddit:
+        await client.postForm(
+          '/api/del',
+          fields: {'id': redditFullname('t1', commentId)},
+        );
     }
   }
 
@@ -433,6 +564,15 @@ class APIComments {
         final response = await client.post(
           path,
           body: {'comment_id': commentId, 'reason': reason},
+        );
+
+      case ServerSoftware.reddit:
+        await client.postForm(
+          '/api/report',
+          fields: {
+            'thing_id': redditFullname('t1', commentId),
+            'reason': reason,
+          },
         );
     }
   }

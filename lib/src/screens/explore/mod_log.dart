@@ -86,6 +86,8 @@ class _ModLogScreenState extends State<ModLogScreen> {
               _filter != ModLogType.all
                   ? newPage.items.where((item) => item.type == _filter).toList()
                   : newPage.items,
+            // Mod log is not supported on Reddit in this fork.
+            ServerSoftware.reddit => newPage.items,
           };
 
           return (newItems, newPage.nextPage);

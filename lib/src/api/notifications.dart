@@ -81,6 +81,8 @@ class APINotifications {
         final response = await client.get(path, queryParams: query);
 
         return NotificationListModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -98,6 +100,8 @@ class APINotifications {
 
       case ServerSoftware.piefed:
         throw UnimplementedError('Get notification unimplemented for PieFed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -125,6 +129,8 @@ class APINotifications {
         final response = await client.get(path);
 
         return response.bodyJson['count']! as int;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -150,6 +156,8 @@ class APINotifications {
         final response = await client.put(path);
 
         return;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -212,6 +220,8 @@ class APINotifications {
         final response = await client.put(path, body: body);
 
         return NotificationModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -241,6 +251,8 @@ class APINotifications {
 
       case ServerSoftware.piefed:
         throw Exception('No push notifications on PieFed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -258,6 +270,8 @@ class APINotifications {
 
       case ServerSoftware.piefed:
         throw Exception('No push notifications on PieFed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -304,6 +318,8 @@ class APINotifications {
             'subscribe': status == NotificationControlStatus.loud,
           },
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }

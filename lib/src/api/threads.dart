@@ -6,6 +6,7 @@ import 'package:interstellar/src/controller/server.dart';
 import 'package:interstellar/src/models/event.dart';
 import 'package:interstellar/src/models/post.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 
 const Map<FeedSort, String> lemmyFeedSortMap = {
@@ -165,7 +166,86 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        final sortName = switch (sort) {
+          null ||
+          FeedSort.hot ||
+          FeedSort.active ||
+          FeedSort.commented => 'hot',
+          FeedSort.newest || FeedSort.oldest => 'new',
+          FeedSort.top ||
+          FeedSort.topDay ||
+          FeedSort.topWeek ||
+          FeedSort.topMonth ||
+          FeedSort.topYear ||
+          FeedSort.topHour ||
+          FeedSort.topSixHour ||
+          FeedSort.topTwelveHour ||
+          FeedSort.topThreeMonths ||
+          FeedSort.topSixMonths ||
+          FeedSort.topNineMonths => 'top',
+          FeedSort.controversial => 'controversial',
+          _ => 'hot',
+        };
+        final topTime = switch (sort) {
+          FeedSort.topDay => 'day',
+          FeedSort.topWeek => 'week',
+          FeedSort.topMonth => 'month',
+          FeedSort.topYear => 'year',
+          _ => 'all',
+        };
+        final path = switch (source) {
+          FeedSource.all => '/r/all/$sortName',
+          // Reddit has no "local" feed; popular is the closest analogue.
+          FeedSource.local => '/r/popular/$sortName',
+          // The home feed for a logged-in user.
+          FeedSource.subscribed => '/best',
+          FeedSource.community =>
+            '/r/${await _redditCommunityName(sourceId!)}/$sortName',
+          FeedSource.user =>
+            '/user/${await _redditUserName(sourceId!)}/submitted',
+          FeedSource.favorited => '/user/me/saved',
+          _ => throw Exception('Feed source not allowed for Reddit: $source'),
+        };
+        final query = {
+          'after': page,
+          'limit': '25',
+          'raw_json': '1',
+          if (sortName == 'top') 't': topTime,
+        };
+
+        final response = await client.get(path, queryParams: query);
+
+        return PostListModel.fromReddit(response.bodyJson);
     }
+  }
+
+  /// Resolve a cached community id (an int, as stored by
+  /// `fetchCachedFeedInput`) back to a subreddit name via `/api/info`.
+  /// A non-numeric source id is already a name and is used as-is.
+  Future<String> _redditCommunityName(String sourceId) async {
+    final id = int.tryParse(sourceId);
+    if (id == null) return sourceId;
+    final response = await client.get(
+      '/api/info',
+      queryParams: {'id': redditFullname('t5', id)},
+    );
+    final children = redditListingChildren(response.bodyJson);
+    if (children.isEmpty) throw Exception('Unknown subreddit id $sourceId');
+    return children.first['display_name']! as String;
+  }
+
+  Future<String> _redditUserName(String sourceId) async {
+    final id = int.tryParse(sourceId);
+    if (id == null) return sourceId;
+    final response = await client.get(
+      '/api/info',
+      queryParams: {'id': redditFullname('t2', id)},
+    );
+    final children = redditListingChildren(response.bodyJson);
+    if (children.isEmpty) throw Exception('Unknown user id $sourceId');
+    return children.first['name']! as String;
   }
 
   Future<PostModel> get(int postId) async {
@@ -198,6 +278,16 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        final response = await client.get(
+          '/api/info',
+          queryParams: {'id': redditFullname('t3', postId)},
+        );
+
+        final children = redditListingChildren(response.bodyJson);
+        if (children.isEmpty) throw Exception('Post not found: $postId');
+        return PostModel.fromReddit(children.first);
     }
   }
 
@@ -238,6 +328,19 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+
+      case ServerSoftware.reddit:
+        // Reddit's vote endpoint is form-encoded and returns an empty
+        // body, so re-fetch the post to get its updated score/vote.
+        await client.postForm(
+          '/api/vote',
+          fields: {
+            'id': redditFullname('t3', postId),
+            'dir': choice.toString(),
+          },
+        );
+
+        return get(postId);
     }
   }
 
@@ -255,6 +358,8 @@ class APIThreads {
 
       case ServerSoftware.piefed:
         throw Exception('Tried to boost on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -274,6 +379,8 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -338,6 +445,8 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -363,6 +472,8 @@ class APIThreads {
         );
 
         return;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -386,6 +497,8 @@ class APIThreads {
         return PostModel.fromPiefed({
           'post_view': response.bodyJson,
         }, langCodeIdPairs: await client.languageCodeIdPairs());
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -496,6 +609,8 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -548,6 +663,8 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -601,6 +718,8 @@ class APIThreads {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -626,6 +745,8 @@ class APIThreads {
           path,
           body: {'post_id': postId, 'reason': reason},
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -647,6 +768,10 @@ class APIThreads {
           path,
           body: {'post_ids': postIds, 'read': read},
         );
+      case ServerSoftware.reddit:
+        // Reddit has no mark-as-read API; read state is tracked in the
+        // local database by AppController instead.
+        return;
     }
   }
 }

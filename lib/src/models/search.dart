@@ -4,6 +4,7 @@ import 'package:interstellar/src/models/community.dart';
 import 'package:interstellar/src/models/post.dart';
 import 'package:interstellar/src/models/user.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 
 part 'search.freezed.dart';
@@ -122,6 +123,26 @@ abstract class SearchListModel with _$SearchListModel {
     return SearchListModel(
       items: items,
       nextPage: json['next_page'] as String?,
+    );
+  }
+
+  /// From Reddit's `/search` (posts) listing plus an optional
+  /// `/subreddits/search` (communities) listing.
+  factory fromReddit(JsonMap postsJson, {JsonMap? communitiesJson}) {
+    final items = <Object>[];
+
+    if (communitiesJson != null) {
+      for (final community in redditListingChildren(communitiesJson)) {
+        items.add(DetailedCommunityModel.fromReddit(community));
+      }
+    }
+    for (final post in redditListingChildren(postsJson)) {
+      items.add(PostModel.fromReddit(post));
+    }
+
+    return SearchListModel(
+      items: items,
+      nextPage: redditListingAfter(postsJson),
     );
   }
 }

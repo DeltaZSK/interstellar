@@ -148,6 +148,8 @@ class APIModeration {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -181,6 +183,8 @@ class APIModeration {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -226,6 +230,8 @@ class APIModeration {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -266,6 +272,8 @@ class APIModeration {
           response.bodyJson,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -293,6 +301,8 @@ class APIModeration {
           response.bodyJson['comment_view']! as JsonMap,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -343,6 +353,8 @@ class APIModeration {
           response.bodyJson['comment_view']! as JsonMap,
           langCodeIdPairs: await client.languageCodeIdPairs(),
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -408,6 +420,8 @@ class APIModeration {
                   .toString(),
           ...json,
         }, langCodeIdPairs: await client.languageCodeIdPairs());
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }

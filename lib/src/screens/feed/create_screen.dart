@@ -430,6 +430,9 @@ class _CreateScreenState extends State<CreateScreen> {
         ServerSoftware.lemmy => 4,
         ServerSoftware.piefed => 6,
         // Poll tab only for Piefed
+        // Reddit: same 4 tabs as Lemmy; submitting throws, as post
+        // creation is not implemented for Reddit in this fork.
+        ServerSoftware.reddit => 4,
       },
       child: Scaffold(
         appBar: AppBar(

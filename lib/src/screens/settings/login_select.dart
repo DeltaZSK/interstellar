@@ -4,6 +4,7 @@ import 'package:interstellar/src/api/api.dart';
 import 'package:interstellar/src/controller/controller.dart';
 import 'package:interstellar/src/controller/router.gr.dart';
 import 'package:interstellar/src/controller/server.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:interstellar/src/widgets/server_software_indicator.dart';
 import 'package:interstellar/src/widgets/text_editor.dart';
@@ -21,6 +22,9 @@ final Map<String, List<(String, ServerSoftware)>> _recommendedInstances = {
     ('lemmy.dbzer0.com', ServerSoftware.lemmy),
     ('piefed.social', ServerSoftware.piefed),
     ('feddit.online', ServerSoftware.piefed),
+    // Personal-fork addition: Reddit is a single fixed host, not an
+    // instance, and needs its own OAuth app (see REDDIT.md).
+    (redditHost, ServerSoftware.reddit),
   ],
   'bg': [('feddit.bg', ServerSoftware.lemmy)],
   'da': [('feddit.dk', ServerSoftware.lemmy)],
@@ -78,7 +82,10 @@ class _LoginSelectScreenState extends State<LoginSelectScreen> {
   final TextEditingController _instanceHostController = TextEditingController();
 
   Future<void> _initiateLogin(String host) async {
-    final software = await getServerSoftware(host);
+    // Reddit has no nodeinfo endpoint; it is a fixed host.
+    final software = host == redditHost
+        ? ServerSoftware.reddit
+        : await getServerSoftware(host);
 
     // Check BuildContext
     if (!mounted) return;

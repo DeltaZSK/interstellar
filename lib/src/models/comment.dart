@@ -6,6 +6,7 @@ import 'package:interstellar/src/models/notification.dart';
 import 'package:interstellar/src/models/post.dart';
 import 'package:interstellar/src/models/user.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 
 part 'comment.freezed.dart';
@@ -105,6 +106,46 @@ abstract class CommentListModel with _$CommentListModel {
         )
         .toList(),
     nextPage: json['next_page'] as String?,
+  );
+
+  /// From Reddit's `/comments/<post>` response, which is a JSON array
+  /// `[postListing, commentListing]`. The second listing's children are
+  /// the top-level comments; replies are nested in each comment's
+  /// `replies` listing.
+  factory fromReddit(
+    List<dynamic> json, {
+    required int postId,
+    required CommunityModel community,
+  }) {
+    final commentListing = json.length > 1
+        ? json[1] as JsonMap
+        : <String, Object?>{};
+    return CommentListModel(
+      items: redditListingChildren(commentListing)
+          .where((c) => c['body'] != null)
+          .map(
+            (c) => CommentModel.fromReddit(
+              c,
+              postId: postId,
+              community: community,
+            ),
+          )
+          .toList(),
+      nextPage: null,
+    );
+  }
+
+  /// Flat list from a Reddit listing of comments (e.g. a user's comments).
+  factory fromRedditFlat(JsonMap json) => CommentListModel(
+    items: redditListingChildren(json).where((c) => c['body'] != null).map((c) {
+      final linkId = c['link_id'] as String?;
+      return CommentModel.fromReddit(
+        c,
+        postId: linkId == null ? 0 : redditIdToInt(linkId),
+        community: CommunityModel.fromReddit(c),
+      );
+    }).toList(),
+    nextPage: redditListingAfter(json),
   );
 }
 
@@ -344,6 +385,79 @@ abstract class CommentModel with _$CommentModel {
               ?.map((item) => EmojiReactionModel.fromPieFed(item))
               .toList() ??
           [],
+    );
+  }
+
+  /// From a Reddit comment `data` map (a `t1` comment). `replies` is
+  /// either an empty string or a nested listing, parsed recursively.
+  factory fromReddit(
+    JsonMap json, {
+    required int postId,
+    required CommunityModel community,
+  }) {
+    final fullname = json['name']! as String;
+    final body = json['body'] as String?;
+    final isDeleted = body == '[deleted]' || body == '[removed]';
+    final parentFullname = json['parent_id'] as String?;
+    final parentIsComment =
+        parentFullname != null && parentFullname.startsWith('t1_');
+
+    var children = <CommentModel>[];
+    final replies = json['replies'];
+    if (replies is JsonMap) {
+      children = redditListingChildren(replies)
+          .where((c) => c['body'] != null)
+          .map(
+            (c) => CommentModel.fromReddit(
+              c,
+              postId: postId,
+              community: community,
+            ),
+          )
+          .toList();
+    }
+
+    return CommentModel(
+      id: redditIdToInt(fullname),
+      user: DetailedUserModel.fromRedditName(
+        json['author'] as String? ?? '[deleted]',
+        json['author_fullname'] as String?,
+      ),
+      community: community,
+      postType: PostType.thread,
+      postId: postId,
+      rootId: null,
+      parentId: parentIsComment ? redditIdToInt(parentFullname) : null,
+      image: null,
+      body: isDeleted ? null : body,
+      lang: null,
+      isLocked: false,
+      upvotes: json['ups'] as int?,
+      downvotes: json['downs'] as int?,
+      boosts: null,
+      myVote: switch (json['likes']) {
+        true => 1,
+        false => -1,
+        _ => 0,
+      },
+      myBoost: null,
+      createdAt: redditDateTimeFromEpoch(json['created_utc'] as num? ?? 0),
+      editedAt: switch (json['edited']) {
+        final num edited => redditDateTimeFromEpoch(edited),
+        _ => null,
+      },
+      children: children,
+      childCount: children.length,
+      visibility: isDeleted
+          ? (body == '[removed]'
+                ? PostVisibility.trashed
+                : PostVisibility.soft_deleted)
+          : PostVisibility.visible,
+      canAuthUserModerate: null,
+      notificationControlStatus: null,
+      bookmarks: [if (json['saved'] as bool? ?? false) ''],
+      apId: 'https://www.reddit.com${json['permalink'] as String? ?? ''}',
+      emojiReactions: null,
     );
   }
 }

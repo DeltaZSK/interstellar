@@ -47,6 +47,8 @@ class APICommunityModeration {
         );
       case ServerSoftware.piefed:
         throw UnimplementedError('Not yet implemented');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -86,6 +88,8 @@ class APICommunityModeration {
 
       case ServerSoftware.piefed:
         throw UnimplementedError('Not yet implemented');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -125,6 +129,8 @@ class APICommunityModeration {
 
       case ServerSoftware.piefed:
         throw UnimplementedError('Not yet implemented');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -152,6 +158,8 @@ class APICommunityModeration {
         final response = await client.get(path, queryParams: query);
 
         return CommunityBanListModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -200,6 +208,8 @@ class APICommunityModeration {
         final response = await client.post(path, body: body);
 
         return CommunityBanModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -234,6 +244,8 @@ class APICommunityModeration {
         final response = await client.put(path, body: body);
 
         return CommunityBanModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -294,6 +306,8 @@ class APICommunityModeration {
         );
 
         return DetailedCommunityModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -351,6 +365,8 @@ class APICommunityModeration {
         );
 
         return DetailedCommunityModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -387,6 +403,8 @@ class APICommunityModeration {
 
       case ServerSoftware.piefed:
         throw UnimplementedError();
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -408,6 +426,8 @@ class APICommunityModeration {
         final response = await client.put(path, body: {'icon_url': ''});
 
         return;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -430,6 +450,8 @@ class APICommunityModeration {
           path,
           body: {'community_id': communityId, 'deleted': true},
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }

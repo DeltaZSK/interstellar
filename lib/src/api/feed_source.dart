@@ -16,7 +16,8 @@ enum FeedView {
     this.software =
         ServerSoftware.mbinFlag |
         ServerSoftware.piefedFlag |
-        ServerSoftware.lemmyFlag,
+        ServerSoftware.lemmyFlag |
+        ServerSoftware.redditFlag,
     this.icon,
   });
 
@@ -169,7 +170,8 @@ enum FeedSort {
     this.software =
         ServerSoftware.mbinFlag |
         ServerSoftware.piefedFlag |
-        ServerSoftware.lemmyFlag,
+        ServerSoftware.lemmyFlag |
+        ServerSoftware.redditFlag,
     this.parent,
     this.icon,
   });

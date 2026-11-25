@@ -9,6 +9,7 @@ import 'package:interstellar/src/models/notification.dart';
 import 'package:interstellar/src/models/poll.dart';
 import 'package:interstellar/src/models/user.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:mime/mime.dart';
 
@@ -85,6 +86,10 @@ abstract class PostListModel with _$PostListModel {
         )
         .toList(),
     nextPage: json['next_page'] as String?,
+  );
+  factory fromReddit(JsonMap json) => PostListModel(
+    items: redditListingChildren(json).map(PostModel.fromReddit).toList(),
+    nextPage: redditListingAfter(json),
   );
 }
 
@@ -439,6 +444,108 @@ abstract class PostModel with _$PostModel {
               ?.map((item) => EmojiReactionModel.fromPieFed(item))
               .toList() ??
           [],
+    );
+  }
+
+  /// From a Reddit listing child `data` map (a `t3` post).
+  factory fromReddit(JsonMap json) {
+    final fullname = json['name']! as String;
+    final createdUtc = json['created_utc'] as num? ?? 0;
+    final edited = json['edited'];
+    final url =
+        json['url_overridden_by_dest'] as String? ?? json['url'] as String?;
+    final isSelf = json['is_self'] as bool? ?? false;
+
+    List<ImageModel>? images;
+    // Gallery posts carry their images in media_metadata.
+    final galleryData = json['gallery_data'] as JsonMap?;
+    final mediaMetadata = json['media_metadata'] as JsonMap?;
+    if (galleryData != null && mediaMetadata != null) {
+      final galleryItems = galleryData['items'];
+      if (galleryItems is List) {
+        images = galleryItems
+            .map((item) {
+              if (item is! JsonMap) return null;
+              final mediaId = item['media_id'];
+              return mediaId is String ? mediaId : null;
+            })
+            .nonNulls
+            .map((mediaId) {
+              final meta = mediaMetadata[mediaId];
+              if (meta is! JsonMap) return null;
+              final source = meta['s'];
+              if (source is! JsonMap) return null;
+              return source['u'] as String?;
+            })
+            .nonNulls
+            .map((src) => ImageModel.fromLemmy(redditUnescapeUrl(src)))
+            .toList();
+      }
+      if (images?.isEmpty == true) images = null;
+    } else {
+      // Single-image posts: prefer the preview image, else the URL itself.
+      final preview = json['preview'] as JsonMap?;
+      final previewImages = preview?['images'] as List<dynamic>?;
+      final previewUrl = previewImages?.firstOrNull == null
+          ? null
+          : ((previewImages!.first as JsonMap)['source'] as JsonMap?)?['u']
+                as String?;
+      if (previewUrl != null) {
+        images = [ImageModel.fromLemmy(redditUnescapeUrl(previewUrl))];
+      } else if (url != null &&
+          (lookupMimeType(url)?.startsWith('image/') ?? false)) {
+        images = [ImageModel.fromLemmy(url)];
+      }
+    }
+
+    final selftext = json['selftext'] as String?;
+
+    return PostModel(
+      type: PostType.thread,
+      id: redditIdToInt(fullname),
+      user: DetailedUserModel.fromRedditName(
+        json['author'] as String? ?? '[deleted]',
+        json['author_fullname'] as String?,
+      ),
+      community: CommunityModel.fromReddit(json),
+      domain: null,
+      title: json['title'] as String?,
+      url: (isSelf || images != null) ? null : url,
+      images: images,
+      body: selftext == null || selftext.isEmpty ? null : selftext,
+      lang: null,
+      numComments: json['num_comments'] as int? ?? 0,
+      upvotes: json['ups'] as int?,
+      downvotes: json['downs'] as int?,
+      boosts: null,
+      myVote: switch (json['likes']) {
+        true => 1,
+        false => -1,
+        _ => 0,
+      },
+      myBoost: null,
+      isOC: json['is_original_content'] as bool?,
+      isNSFW: json['over_18'] as bool? ?? false,
+      isPinned: json['stickied'] as bool? ?? false,
+      isLocked: json['locked'] as bool? ?? false,
+      createdAt: redditDateTimeFromEpoch(createdUtc),
+      editedAt: edited is num ? redditDateTimeFromEpoch(edited) : null,
+      lastActive: redditDateTimeFromEpoch(createdUtc),
+      visibility: PostVisibility.visible,
+      canAuthUserModerate: null,
+      notificationControlStatus: null,
+      bookmarks: [if (json['saved'] as bool? ?? false) ''],
+      read: false,
+      crossPosts:
+          (json['crosspost_parent_list'] as List<dynamic>?)
+              ?.map((post) => PostModel.fromReddit(post as JsonMap))
+              .toList() ??
+          [],
+      flairs: [],
+      poll: null,
+      event: null,
+      apId: 'https://www.reddit.com${json['permalink'] as String? ?? ''}',
+      emojiReactions: null,
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:interstellar/src/controller/database/database.dart';
 import 'package:interstellar/src/models/image.dart';
 import 'package:interstellar/src/models/notification.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:interstellar/src/widgets/markdown/markdown_mention.dart';
 
@@ -171,6 +172,59 @@ abstract class DetailedUserModel with _$DetailedUserModel {
       apId: piefedPerson['actor_id']! as String,
     );
   }
+
+  /// From Reddit's `/api/v1/me` or `/user/<name>/about` (`data` map).
+  /// Both carry the same core fields; `/about` additionally has a
+  /// `subreddit` object with the user's profile description/banner.
+  factory fromReddit(JsonMap json) {
+    final subreddit = json['subreddit'] as JsonMap?;
+    final icon = json['icon_img'] as String?;
+    final created = json['created_utc'] ?? json['created'];
+    final bannerImg = subreddit?['banner_img'];
+    return DetailedUserModel(
+      id: redditIdToInt((json['id'] as String?)!),
+      name: (json['name'] as String?)!,
+      displayName: subreddit?['title'] as String?,
+      avatar: icon == null || icon.isEmpty
+          ? null
+          : ImageModel.fromLemmy(redditUnescapeUrl(icon)),
+      cover: bannerImg == null
+          ? null
+          : ImageModel.fromLemmy(redditUnescapeUrl(bannerImg as String)),
+      createdAt: created == null
+          ? DateTime.fromMillisecondsSinceEpoch(0)
+          : redditDateTimeFromEpoch(created as num),
+      isBot: false,
+      about: subreddit?['public_description'] as String?,
+      followersCount: subreddit?['subscribers'] as int?,
+      isFollowedByUser: null,
+      isFollowerOfUser: null,
+      isBlockedByUser: null,
+      notificationControlStatus: null,
+      tags: [],
+      apId: 'https://www.reddit.com/user/${json['name']! as String}/',
+    );
+  }
+
+  /// Minimal user for a post/comment listing, where Reddit only gives an
+  /// author name (and usually `author_fullname`, `t2_...`).
+  factory fromRedditName(String name, String? fullname) => DetailedUserModel(
+    id: fullname == null ? 0 : redditIdToInt(fullname),
+    name: name,
+    displayName: null,
+    avatar: null,
+    cover: null,
+    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+    isBot: false,
+    about: null,
+    followersCount: null,
+    isFollowedByUser: null,
+    isFollowerOfUser: null,
+    isBlockedByUser: null,
+    notificationControlStatus: null,
+    tags: [],
+    apId: 'https://www.reddit.com/user/$name/',
+  );
 }
 
 @freezed
@@ -209,6 +263,15 @@ abstract class UserModel with _$UserModel {
     createdAt: DateTime.parse(json['published']! as String),
     isBot: json['bot']! as bool,
     apId: json['actor_id']! as String,
+  );
+
+  factory fromRedditName(String name, String? fullname) => UserModel(
+    id: fullname == null ? 0 : redditIdToInt(fullname),
+    name: name,
+    avatar: null,
+    createdAt: null,
+    isBot: false,
+    apId: 'https://www.reddit.com/user/$name/',
   );
 
   factory fromDetailedUser(DetailedUserModel user) => UserModel(

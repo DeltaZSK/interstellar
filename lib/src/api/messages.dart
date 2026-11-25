@@ -40,6 +40,8 @@ class APIMessages {
         final response = await client.get(path, queryParams: query);
 
         return MessageListModel.fromPiefed(response.bodyJson, myUserId!);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -105,6 +107,8 @@ class APIMessages {
                   nextPage: null,
                 ))
             .copyWith(nextPage: json['next_page'] as String?);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -150,6 +154,8 @@ class APIMessages {
           },
           (json as dynamic)['private_message_view']['creator']['id'] as int,
         ).items.first;
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -170,6 +176,8 @@ class APIMessages {
 
       case ServerSoftware.piefed:
         return create(threadId, body);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }

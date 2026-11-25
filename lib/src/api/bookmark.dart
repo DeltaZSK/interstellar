@@ -111,6 +111,8 @@ class APIBookmark {
 
       case ServerSoftware.piefed:
         throw UnimplementedError('Unimplemented');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -127,6 +129,8 @@ class APIBookmark {
         throw Exception('Bookmark lists not on Lemmy');
       case ServerSoftware.piefed:
         throw Exception('Bookmark lists not on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -141,6 +145,8 @@ class APIBookmark {
         throw Exception('Bookmark lists not on Lemmy');
       case ServerSoftware.piefed:
         throw Exception('Bookmark lists not on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -157,6 +163,8 @@ class APIBookmark {
         throw Exception('Bookmark lists not on Lemmy');
       case ServerSoftware.piefed:
         throw Exception('Bookmark lists not on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -174,6 +182,8 @@ class APIBookmark {
 
       case ServerSoftware.piefed:
         throw Exception('Bookmark lists not on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -230,6 +240,8 @@ class APIBookmark {
         );
 
         return [''];
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -251,6 +263,8 @@ class APIBookmark {
 
       case ServerSoftware.piefed:
         throw Exception('Bookmark lists not on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -307,6 +321,8 @@ class APIBookmark {
         );
 
         return [];
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -328,6 +344,8 @@ class APIBookmark {
 
       case ServerSoftware.piefed:
         throw Exception('Bookmark lists not on piefed');
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }

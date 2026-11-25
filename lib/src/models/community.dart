@@ -7,6 +7,7 @@ import 'package:interstellar/src/models/notification.dart';
 import 'package:interstellar/src/models/post.dart';
 import 'package:interstellar/src/models/user.dart';
 import 'package:interstellar/src/utils/models.dart';
+import 'package:interstellar/src/utils/reddit.dart';
 import 'package:interstellar/src/utils/utils.dart';
 import 'package:interstellar/src/widgets/markdown/markdown_mention.dart';
 
@@ -38,6 +39,13 @@ abstract class DetailedCommunityListModel with _$DetailedCommunityListModel {
         .map((item) => DetailedCommunityModel.fromPiefed(item as JsonMap))
         .toList(),
     nextPage: json['next_page'] as String?,
+  );
+
+  factory fromReddit(JsonMap json) => DetailedCommunityListModel(
+    items: redditListingChildren(json)
+        .map(DetailedCommunityModel.fromReddit)
+        .toList(),
+    nextPage: redditListingAfter(json),
   );
 }
 
@@ -199,6 +207,46 @@ abstract class DetailedCommunityModel with _$DetailedCommunityModel {
 
     return community;
   }
+
+  /// From Reddit's `/r/<name>/about` or a subreddit search/listing `data`
+  /// map. Reddit's about endpoint does not report a post count, so the
+  /// thread counts are 0.
+  factory fromReddit(JsonMap json) {
+    final name = (json['display_name'] as String?)!;
+    final communityIcon = json['community_icon'] as String?;
+    final iconSrc = communityIcon?.isNotEmpty == true
+        ? communityIcon
+        : json['icon_img'] as String?;
+    final community = DetailedCommunityModel(
+      id: redditIdToInt((json['id'] as String?)!),
+      name: name,
+      title: (json['title'] as String?)?.isNotEmpty == true
+          ? json['title']! as String
+          : name,
+      icon: iconSrc == null || iconSrc.isEmpty
+          ? null
+          : ImageModel.fromLemmy(redditUnescapeUrl(iconSrc)),
+      description: json['public_description'] as String?,
+      owner: null,
+      moderators: [],
+      subscriptionsCount: json['subscribers'] as int? ?? 0,
+      threadCount: 0,
+      threadCommentCount: 0,
+      microblogCount: null,
+      microblogCommentCount: null,
+      isAdult: json['over18'] as bool? ?? false,
+      isUserSubscribed: json['user_is_subscriber'] as bool?,
+      isBlockedByUser: null,
+      isPostingRestrictedToMods: false,
+      notificationControlStatus: null,
+      flairs: [],
+      apId: 'https://www.reddit.com/r/$name/',
+    );
+
+    communityMentionCache[community.name] = community;
+
+    return community;
+  }
 }
 
 @freezed
@@ -230,6 +278,25 @@ abstract class CommunityModel with _$CommunityModel {
     icon: lemmyGetOptionalImage(json['icon'] as String?),
     apId: json['actor_id']! as String,
   );
+
+  /// From a post's `data` (fields `subreddit`, `subreddit_id`) or from a
+  /// subreddit `data` map (`display_name`, `id`).
+  factory fromReddit(JsonMap json) {
+    final name =
+        (json['display_name'] as String?) ??
+        (json['subreddit'] as String?) ??
+        (json['subreddit_name_prefixed'] as String? ?? '').replaceFirst(
+          'r/',
+          '',
+        );
+    final idStr = (json['subreddit_id'] as String?) ?? (json['id']! as String);
+    return CommunityModel(
+      id: redditIdToInt(idStr),
+      name: name,
+      icon: null,
+      apId: 'https://www.reddit.com/r/$name/',
+    );
+  }
 
   factory fromDetailedCommunity(DetailedCommunityModel community) =>
       CommunityModel(

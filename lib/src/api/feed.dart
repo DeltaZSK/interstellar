@@ -31,6 +31,8 @@ class APIFeed {
         final json = response.bodyJson;
 
         return FeedListModel.fromPiefed(json);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -49,6 +51,8 @@ class APIFeed {
         final response = await client.get(path, queryParams: query);
 
         return FeedModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -67,6 +71,8 @@ class APIFeed {
         final response = await client.get(path, queryParams: query);
 
         return FeedModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -87,6 +93,8 @@ class APIFeed {
         );
 
         return FeedModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -133,6 +141,8 @@ class APIFeed {
         );
 
         return FeedModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -178,6 +188,8 @@ class APIFeed {
         );
 
         return FeedModel.fromPiefed(response.bodyJson);
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 
@@ -196,6 +208,8 @@ class APIFeed {
           path,
           body: {'feed_id': feedId, 'deleted': true},
         );
+      case ServerSoftware.reddit:
+        throw UnsupportedError('Not supported on Reddit');
     }
   }
 }
